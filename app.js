@@ -17,6 +17,19 @@ let active = 0;
 let navigationTarget = null;
 let scrollFrame;
 let settleTimer;
+const gestureCue = document.getElementById('gesture-cue');
+let lastHintPage = null;
+let gestureCueTimer;
+function showGestureCue() {
+  const pageId = pages[active].id;
+  if (pageId === lastHintPage) return;
+  lastHintPage = pageId;
+  gestureCue.classList.remove('is-visible');
+  void gestureCue.offsetWidth;
+  gestureCue.classList.add('is-visible');
+  clearTimeout(gestureCueTimer);
+  gestureCueTimer = setTimeout(() => gestureCue.classList.remove('is-visible'), 2800);
+}
 
 function syncHeight() {
   if (phoneLayout.matches) book.style.removeProperty('height');
@@ -32,10 +45,8 @@ function state(index) {
     if (button.dataset.pageTarget === section) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   });
-  document.getElementById('page-count').textContent = `${active + 1} / ${pages.length}`;
-  document.getElementById('prev').disabled = active === 0;
-  document.getElementById('next').disabled = active === pages.length - 1;
   refreshTripMap(pages[active].id);
+  refreshFoodMap(pages[active].id);
 }
 function pageLeft(index) {
   return pages[index].offsetLeft - pages[0].offsetLeft;
@@ -45,12 +56,15 @@ function nearestPage() {
   return Math.max(0, Math.min(pages.length - 1, Math.round(book.scrollLeft / step)));
 }
 function finishScroll() {
+  if (navigationTarget !== null && Math.abs(book.scrollLeft - pageLeft(navigationTarget)) > 2) return;
   navigationTarget = null;
   state(nearestPage());
+  showGestureCue();
 }
 function go(index) {
   const target = Math.max(0, Math.min(pages.length - 1, index));
   if (target !== active && phoneLayout.matches) pages[target].scrollTop = 0;
+  if (target !== active) gestureCue.classList.remove('is-visible');
   navigationTarget = target;
   state(target);
   book.scrollTo({left: pageLeft(target), behavior: reduced.matches ? 'instant' : 'smooth'});
@@ -66,18 +80,22 @@ function goToId(id) {
 function openSpot(key) { goToId('spot-' + key); }
 
 dots.forEach(button => button.addEventListener('click', () => goToId(button.dataset.pageTarget)));
-document.getElementById('prev').addEventListener('click', () => go(active - 1));
-document.getElementById('next').addEventListener('click', () => go(active + 1));
 book.addEventListener('scroll', () => {
   cancelAnimationFrame(scrollFrame);
   scrollFrame = requestAnimationFrame(() => {
     const index = nearestPage();
-    if (navigationTarget === null && index !== active) state(index);
+    if (navigationTarget === null && index !== active) {
+      gestureCue.classList.remove('is-visible');
+      state(index);
+    }
   });
   clearTimeout(settleTimer);
   settleTimer = setTimeout(finishScroll, 150);
 }, {passive: true});
 book.addEventListener('scrollend', finishScroll);
+for (const type of ['pointerdown', 'wheel']) {
+  book.addEventListener(type, () => { navigationTarget = null; }, {passive: true});
+}
 
 let observedBookWidth = book.clientWidth;
 new ResizeObserver(() => {
@@ -88,11 +106,13 @@ new ResizeObserver(() => {
   navigationTarget = null;
   book.scrollTo({left: pageLeft(active), behavior: 'instant'});
   refreshTripMap(pages[active].id);
+  refreshFoodMap(pages[active].id);
 }).observe(book);
 phoneLayout.addEventListener('change', () => {
   syncHeight();
   book.scrollTo({left: pageLeft(active), behavior: 'instant'});
   refreshTripMap(pages[active].id);
+  refreshFoodMap(pages[active].id);
 });
 
 document.querySelectorAll('[data-spot]').forEach(button => {
@@ -120,6 +140,9 @@ document.querySelectorAll('[data-return-day]').forEach(button => {
 document.querySelectorAll('[data-go-map]').forEach(button => {
   button.addEventListener('click', () => goToId(button.dataset.goMap));
 });
+document.querySelectorAll('[data-go-food]').forEach(button => {
+  button.addEventListener('click', () => goToId(button.dataset.goFood));
+});
 document.querySelector('.brand').addEventListener('click', event => {
   event.preventDefault(); go(0);
 });
@@ -130,3 +153,4 @@ pages.forEach(page => new ResizeObserver(() => {
   if (page === pages[active]) syncHeight();
 }).observe(page));
 state(0);
+requestAnimationFrame(showGestureCue);

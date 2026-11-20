@@ -1,5 +1,6 @@
 const guideContent={
   "smile": {
+    "footer": "ぬりぬりしたら、ふたりのたからもの♪",
     "day": 1,
     "title": "HELLO KITTY SMILE",
     "tag": "すきな色を、ちょこん。世界にひとつのたからもの♪",
@@ -27,6 +28,7 @@ const guideContent={
     "map": "HELLO KITTY SMILE 淡路島"
   },
   "craft": {
+    "footer": "おいしいと海のきらきら、半分こ♪",
     "day": 1,
     "title": "クラフトサーカス",
     "tag": "潮風そよそよ。ふたりでもぐもぐ、いただきます♪",
@@ -54,6 +56,7 @@ const guideContent={
     "map": "クラフトサーカス 淡路島"
   },
   "hotel": {
+    "footer": "今日はここで、のんびりひとやすみ。",
     "day": 1,
     "title": "フェアフィールド・バイ・マリオット・兵庫淡路島東浦",
     "shortTitle": "海のそばのホテルで、ひと休み。",
@@ -83,6 +86,7 @@ const guideContent={
     "map": "フェアフィールド 兵庫淡路島東浦"
   },
   "yumebutai": {
+    "footer": "てくてく見つけた景色を、心にぱちり。",
     "day": 1,
     "title": "淡路夢舞台",
     "tag": "てくてく歩くたび、すてきな景色にこんにちは。",
@@ -112,6 +116,7 @@ const guideContent={
     "extraLabel": "園内マップ"
   },
   "nankin": {
+    "footer": "ほかほか、もぐもぐ。次はどれにする？",
     "day": 2,
     "title": "南京町",
     "tag": "おいしいに出会って、にっこり分けっこ♪",
@@ -141,6 +146,7 @@ const guideContent={
     "extraLabel": "アクセス案内"
   },
   "kyoryuchi": {
+    "footer": "お気に入りの街角で、ほっとひと息。",
     "day": 2,
     "title": "神戸旧居留地",
     "tag": "すてきな街角で、コーヒーとひとやすみ。",
@@ -169,6 +175,7 @@ const guideContent={
     "map": "神戸 旧居留地"
   },
   "meriken": {
+    "footer": "港の風をつれて、思い出をおうちへ。",
     "day": 2,
     "title": "メリケンパーク",
     "tag": "海風といっしょに、旅の思い出をぎゅっ。",
@@ -199,6 +206,6 @@ const guideContent={
 const escapeGuide=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 for(const [key,s] of Object.entries(guideContent)){
  const page=document.createElement('article');page.className='page spot-page';page.id='spot-'+key;page.dataset.day=String(s.day);page.setAttribute('aria-label',s.title+'の紹介');
- page.innerHTML=`<header class="page-heading"><span class="character bow" aria-hidden="true"></span><h2>DAY ${s.day} スポット</h2><span class="character beret" aria-hidden="true"></span></header><p class="guide-time">${escapeGuide(s.time)}</p><h3 class="guide-title ${key==='hotel'?'hotel-title':''}">${escapeGuide(s.title)}</h3><p class="guide-tag">${escapeGuide(s.tag)}</p><figure class="guide-figure"><img src="${s.image}" alt="${escapeGuide(s.alt)}" width="1200" height="800" loading="lazy"><figcaption>写真：<a href="${s.source}" target="_blank" rel="noopener noreferrer">${escapeGuide(s.credit)}</a></figcaption></figure><p class="guide-intro">${escapeGuide(s.intro)}</p><div class="guide-highlights">${s.highlights.map(([t,d])=>`<div class="guide-highlight"><span>${escapeGuide(t)}</span><p>${escapeGuide(d)}</p></div>`).join('')}</div><div class="guide-memo"><strong>たいせつなメモ</strong><p>${escapeGuide(s.memo)}</p></div><div class="guide-links"><a href="${s.official||s.source}" target="_blank" rel="noopener noreferrer">公式サイト</a><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.map)}" target="_blank" rel="noopener noreferrer">地図を開く</a>${s.extraUrl?`<a href="${s.extraUrl}" target="_blank" rel="noopener noreferrer">${s.extraLabel}</a>`:''}</div><button type="button" class="return-day" data-return-day="${s.day}">DAY ${s.day} の日程に戻る</button><footer class="page-footer"><span class="character kitty" aria-hidden="true"></span><p>${s.day===1?'ふたりのかわいい、見つけよう♪':'思い出いっぱい、また来ようね♪'}</p><span class="character purin" aria-hidden="true"></span></footer>`;
+ page.innerHTML=`<header class="page-heading"><span class="character bow" aria-hidden="true"></span><h2>DAY ${s.day} スポット</h2><span class="character beret" aria-hidden="true"></span></header><p class="guide-time">${escapeGuide(s.time)}</p><h3 class="guide-title ${key==='hotel'?'hotel-title':''}">${escapeGuide(s.title)}</h3><p class="guide-tag">${escapeGuide(s.tag)}</p><figure class="guide-figure"><img src="${s.image}" alt="${escapeGuide(s.alt)}" width="1200" height="800" loading="lazy"><figcaption>写真：<a href="${s.source}" target="_blank" rel="noopener noreferrer">${escapeGuide(s.credit)}</a></figcaption></figure><p class="guide-intro">${escapeGuide(s.intro)}</p><div class="guide-highlights">${s.highlights.map(([t,d])=>`<div class="guide-highlight"><span>${escapeGuide(t)}</span><p>${escapeGuide(d)}</p></div>`).join('')}</div><div class="guide-memo"><strong>たいせつなメモ</strong><p>${escapeGuide(s.memo)}</p></div><div class="guide-links"><a href="${s.official||s.source}" target="_blank" rel="noopener noreferrer">公式サイト</a><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.map)}" target="_blank" rel="noopener noreferrer">地図を開く</a>${s.extraUrl?`<a href="${s.extraUrl}" target="_blank" rel="noopener noreferrer">${s.extraLabel}</a>`:''}</div><button type="button" class="return-day" data-return-day="${s.day}">DAY ${s.day} の日程に戻る</button><footer class="page-footer"><span class="character kitty" aria-hidden="true"></span><p>${escapeGuide(s.footer)}</p><span class="character purin" aria-hidden="true"></span></footer>`;
  document.getElementById('book').insertBefore(page,document.getElementById(s.day===1?'day2':'links'));
 }
