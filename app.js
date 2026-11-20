@@ -44,9 +44,13 @@ function enterPageMotion() {
   page.classList.add('page-enter');
 }
 let active = 0;
-let navigationTarget = null;
-let scrollFrame;
-let settleTimer;
+let pageTurn = null;
+let swipePointer = null;
+let queuedPage = null;
+let suppressClickUntil = 0;
+let wheelTotal = 0;
+let lastWheelAt = 0;
+let wheelLockedUntil = 0;
 const gestureCue = document.getElementById('gesture-cue');
 let lastHintPage = null;
 let gestureCueTimer;
@@ -67,6 +71,7 @@ function syncHeight() {
 }
 function state(index) {
   active = Math.max(0, Math.min(pages.length - 1, index));
+  pages.forEach((page, i) => { page.inert = i !== active; });
   syncHeight();
   const section = active >= pages.findIndex(p => p.id === 'links') ? 'links'
     : active >= pages.findIndex(p => p.id === 'day2') ? 'day2'
@@ -81,28 +86,128 @@ function state(index) {
 function pageLeft(index) {
   return pages[index].offsetLeft - pages[0].offsetLeft;
 }
-function nearestPage() {
-  const step = pages.length > 1 ? pageLeft(1) : book.clientWidth;
-  return Math.max(0, Math.min(pages.length - 1, Math.round(book.scrollLeft / step)));
+function placePage(index, reset = true) {
+  const target = Math.max(0, Math.min(pages.length - 1, index));
+  if (reset && target !== active && phoneLayout.matches) pages[target].scrollTop = 0;
+  state(target);
+  book.scrollTo({left: pageLeft(target), behavior: 'instant'});
 }
-function finishScroll() {
-  if (navigationTarget !== null && Math.abs(book.scrollLeft - pageLeft(navigationTarget)) > 2) return;
-  navigationTarget = null;
-  state(nearestPage());
-  showGestureCue();
+
+// A temporary, inert copy of the visible paper turns above the real next page.
+// The real pages keep their native vertical scroll areas, including long guides.
+function makePaperCopy(page, width, offsetY, scrollTop) {
+  const copy = page.cloneNode(true);
+  copy.removeAttribute('id');
+  copy.removeAttribute('aria-label');
+  copy.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
+  copy.classList.remove('is-current', 'page-enter');
+  copy.classList.add('page-turn-copy');
+  copy.inert = true;
+  copy.setAttribute('aria-hidden', 'true');
+  copy.style.setProperty('width', width + 'px', 'important');
+  copy.style.setProperty('height', page.clientHeight + 'px', 'important');
+  copy.style.top = offsetY + 'px';
+  // Embedded map frames cannot be copied as a rendered bitmap. Keep their space
+  // on the turning paper; the real, interactive map stays on the live page.
+  copy.querySelectorAll('iframe').forEach(frame => {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'page-turn-map-preview';
+    frame.replaceWith(placeholder);
+  });
+  return {copy, scrollTop};
+}
+function startPageTurn(target) {
+  if (pageTurn || target === active || target < 0 || target >= pages.length) return false;
+  const from = active;
+  const backward = target < from;
+  const originalTop = pages[from].scrollTop;
+  const rect = book.getBoundingClientRect();
+  const top = Math.max(0, rect.top);
+  const height = Math.min(innerHeight, rect.bottom) - top;
+  if (height <= 0) return false;
+  const paperPage = backward ? pages[target] : pages[from];
+  const offsetY = paperPage.getBoundingClientRect().top - top;
+  const paper = makePaperCopy(paperPage, rect.width, offsetY, backward ? 0 : originalTop);
+  const stage = document.createElement('div');
+  stage.className = 'page-turn-stage';
+  stage.setAttribute('aria-hidden', 'true');
+  stage.inert = true;
+  Object.assign(stage.style, {left: rect.left + 'px', top: top + 'px', width: rect.width + 'px', height: height + 'px'});
+  stage.innerHTML = '<div class="page-turn-shadow"></div><div class="page-turn-sheet"><div class="page-turn-front"></div><div class="page-turn-back"><span>ふたり旅のしおり</span></div><div class="page-turn-light"></div></div>';
+  stage.querySelector('.page-turn-front').append(paper.copy);
+  document.body.append(stage);
+  paper.copy.scrollTop = paper.scrollTop;
+  pageTurn = {from, target, backward, originalTop, progress: 0, stage,
+    sheet: stage.querySelector('.page-turn-sheet'), shadow: stage.querySelector('.page-turn-shadow'),
+    light: stage.querySelector('.page-turn-light'), animation: null, settling: false};
+  book.classList.add('is-turning');
+  book.dataset.turnState = 'dragging';
+  book.setAttribute('aria-busy', 'true');
+  gestureCue.classList.remove('is-visible');
+  clearTimeout(gestureCueTimer);
+  // Forward: uncover the next page. Backward: lay the previous sheet on top.
+  if (!backward) placePage(target);
+  updatePageTurn(0);
+  return true;
+}
+function paperTransform(turn, progress) {
+  const angle = turn.backward ? -150 * (1 - progress) : -150 * progress;
+  return `rotateY(${angle}deg)`;
+}
+function updatePageTurn(progress) {
+  if (!pageTurn) return;
+  pageTurn.progress = Math.max(0, Math.min(1, progress));
+  pageTurn.sheet.style.transform = paperTransform(pageTurn, pageTurn.progress);
+  const shade = Math.sin(pageTurn.progress * Math.PI);
+  pageTurn.shadow.style.opacity = (shade * .22).toFixed(3);
+  pageTurn.light.style.opacity = (shade * .32).toFixed(3);
+}
+function completePageTurn(commit) {
+  if (!pageTurn) return;
+  const turn = pageTurn;
+  pageTurn = null;
+  turn.animation?.cancel();
+  if (commit) placePage(turn.target);
+  else {
+    placePage(turn.from, false);
+    pages[turn.from].scrollTop = turn.originalTop;
+  }
+  turn.stage.remove();
+  book.classList.remove('is-turning');
+  book.dataset.turnState = 'idle';
+  book.removeAttribute('aria-busy');
   enterPageMotion();
+  if (commit) showGestureCue();
+  const next = queuedPage;
+  queuedPage = null;
+  if (next !== null && next !== active) requestAnimationFrame(() => go(next));
+}
+function settlePageTurn(commit) {
+  if (!pageTurn || pageTurn.settling) return;
+  const turn = pageTurn;
+  turn.settling = true;
+  book.dataset.turnState = 'settling';
+  const destination = commit ? 1 : 0;
+  const duration = reduced.matches ? 0 : Math.max(200, 720 * Math.abs(destination - turn.progress));
+  turn.animation = turn.sheet.animate([
+    {transform: paperTransform(turn, turn.progress)},
+    {transform: paperTransform(turn, destination)}
+  ], {duration, easing: 'cubic-bezier(.45,.05,.25,1)', fill: 'forwards'});
+  turn.shadow.animate([{opacity: turn.shadow.style.opacity}, {opacity: 0}], {duration, fill: 'forwards'});
+  turn.light.animate([{opacity: turn.light.style.opacity}, {opacity: 0}], {duration, fill: 'forwards'});
+  turn.animation.finished.then(() => {
+    if (pageTurn === turn) completePageTurn(commit);
+  }).catch(() => {});
 }
 function go(index) {
   const target = Math.max(0, Math.min(pages.length - 1, index));
-  if (target !== active && phoneLayout.matches) pages[target].scrollTop = 0;
-  if (target !== active) gestureCue.classList.remove('is-visible');
-  navigationTarget = target;
-  state(target);
-  book.scrollTo({left: pageLeft(target), behavior: reduced.matches ? 'instant' : 'smooth'});
-  if (!phoneLayout.matches) {
-    window.scrollTo({top: Math.max(0, book.getBoundingClientRect().top + window.scrollY - 12),
-      behavior: reduced.matches ? 'instant' : 'smooth'});
-  }
+  if (pageTurn) { queuedPage = target; return; }
+  if (target === active) return;
+  if (reduced.matches || !startPageTurn(target)) {
+    placePage(target);
+    enterPageMotion();
+    showGestureCue();
+  } else settlePageTurn(true);
 }
 function goToId(id) {
   const index = pages.findIndex(page => page.id === id);
@@ -111,22 +216,72 @@ function goToId(id) {
 function openSpot(key) { goToId('spot-' + key); }
 
 dots.forEach(button => button.addEventListener('click', () => goToId(button.dataset.pageTarget)));
-book.addEventListener('scroll', () => {
-  cancelAnimationFrame(scrollFrame);
-  scrollFrame = requestAnimationFrame(() => {
-    const index = nearestPage();
-    if (navigationTarget === null && index !== active) {
-      gestureCue.classList.remove('is-visible');
-      state(index);
-    }
-  });
-  clearTimeout(settleTimer);
-  settleTimer = setTimeout(finishScroll, 150);
+const ownsGesture = target => target.closest('input,textarea,select,[contenteditable="true"],.map-interactive,.food-map.is-interactive,.leaflet-control');
+book.addEventListener('pointerdown', event => {
+  if (!event.isPrimary || event.button !== 0 || pageTurn || ownsGesture(event.target)) return;
+  swipePointer = {id: event.pointerId, x: event.clientX, y: event.clientY, at: performance.now(), dx: 0, started: false};
 }, {passive: true});
-book.addEventListener('scrollend', finishScroll);
-for (const type of ['pointerdown', 'wheel']) {
-  book.addEventListener(type, () => { navigationTarget = null; }, {passive: true});
+book.addEventListener('pointermove', event => {
+  const pointer = swipePointer;
+  if (!pointer || pointer.id !== event.pointerId) return;
+  const dx = event.clientX - pointer.x;
+  const dy = event.clientY - pointer.y;
+  if (!pointer.started) {
+    // Let the browser own vertical movement and pinch zoom from the start.
+    if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) { swipePointer = null; return; }
+    if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
+    const target = active + (dx < 0 ? 1 : -1);
+    if (reduced.matches) {
+      if (Math.abs(dx) > 55) { go(target); suppressClickUntil = performance.now() + 400; swipePointer = null; }
+      return;
+    }
+    if (!startPageTurn(target)) { swipePointer = null; return; }
+    pointer.started = true;
+    pointer.direction = dx < 0 ? -1 : 1;
+    book.setPointerCapture(event.pointerId);
+  }
+  event.preventDefault();
+  pointer.dx = dx;
+  updatePageTurn(pointer.direction * dx / book.clientWidth);
+}, {passive: false});
+function endSwipe(event, cancelled = false) {
+  const pointer = swipePointer;
+  if (!pointer || pointer.id !== event.pointerId) return;
+  swipePointer = null;
+  if (!pointer.started) return;
+  suppressClickUntil = performance.now() + 450;
+  const travel = pointer.direction * pointer.dx;
+  const velocity = travel / Math.max(1, performance.now() - pointer.at);
+  settlePageTurn(!cancelled && (travel > book.clientWidth * .22 || (travel > 35 && velocity > .45)));
+  if (book.hasPointerCapture(event.pointerId)) book.releasePointerCapture(event.pointerId);
 }
+book.addEventListener('pointerup', event => endSwipe(event));
+book.addEventListener('pointercancel', event => endSwipe(event, true));
+book.addEventListener('lostpointercapture', event => endSwipe(event, true));
+book.addEventListener('click', event => {
+  if (performance.now() >= suppressClickUntil) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, true);
+book.addEventListener('dragstart', event => event.preventDefault());
+book.addEventListener('wheel', event => {
+  if (ownsGesture(event.target) || Math.abs(event.deltaX) < 2 || Math.abs(event.deltaX) < Math.abs(event.deltaY) * 1.2) return;
+  event.preventDefault();
+  const now = performance.now();
+  if (pageTurn || now < wheelLockedUntil) return;
+  wheelTotal = now - lastWheelAt < 180 ? wheelTotal + event.deltaX : event.deltaX;
+  lastWheelAt = now;
+  if (Math.abs(wheelTotal) < 45) return;
+  go(active + Math.sign(wheelTotal));
+  wheelTotal = 0;
+  wheelLockedUntil = now + 900;
+}, {passive: false});
+document.addEventListener('keydown', event => {
+  if (ownsGesture(event.target) || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  event.preventDefault();
+  go(active + (event.key === 'ArrowRight' ? 1 : -1));
+});
 
 let observedBookWidth = book.clientWidth;
 new ResizeObserver(() => {
@@ -134,17 +289,21 @@ new ResizeObserver(() => {
   syncHeight();
   if (width === observedBookWidth) return;
   observedBookWidth = width;
-  navigationTarget = null;
+  if (pageTurn) completePageTurn(false);
+  swipePointer = null;
   book.scrollTo({left: pageLeft(active), behavior: 'instant'});
   refreshTripMap(pages[active].id);
   refreshFoodMap(pages[active].id);
 }).observe(book);
 phoneLayout.addEventListener('change', () => {
+  if (pageTurn) completePageTurn(false);
+  swipePointer = null;
   syncHeight();
   book.scrollTo({left: pageLeft(active), behavior: 'instant'});
   refreshTripMap(pages[active].id);
   refreshFoodMap(pages[active].id);
 });
+reduced.addEventListener('change', () => { if (pageTurn) completePageTurn(true); });
 
 document.querySelectorAll('[data-spot]').forEach(button => {
   button.addEventListener('click', () => openSpot(button.dataset.spot));
