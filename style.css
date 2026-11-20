@@ -140,3 +140,70 @@
  .food-map{height:clamp(240px,36dvh,340px)}
  .food-card p{font-size:16px}
 }
+
+/* Cover typography and artwork sit together as a single composition. */
+.cover-text{flex:1 0 auto;display:flex;flex-direction:column;justify-content:center;padding-bottom:4px}
+.cover-copy{position:relative;margin:6px 14px 8px;color:#5d302b;font-weight:900;line-height:1.55;letter-spacing:-.035em}
+.cover-copy>span{display:block;font-size:clamp(19px,5.3cqw,26px)}
+.cover-copy>strong{display:inline-block;align-self:center;font-size:clamp(24px,6.6cqw,32px);line-height:1.5;background:linear-gradient(transparent 66%,#ffe775b3 66%,#ffe775b3 91%,transparent 91%);padding:0 5px}
+.cover-scene{flex:0 0 auto;width:100%;height:auto;min-height:0;margin-top:-25px;object-fit:contain;object-position:center bottom}
+.cover-copy:before,.cover-copy:after{content:'✦';position:absolute;color:#efbf19;font-size:18px;top:35%;left:2px;pointer-events:none}
+.cover-copy:after{left:auto;right:2px;top:3px;font-size:13px}
+@media screen and (max-width:767px), screen and (max-height:600px) and (pointer:coarse){
+ .cover-text{flex:1 0 auto;padding-bottom:0}
+ .cover-copy{margin:6px 14px 8px}
+ .cover-copy>span{font-size:clamp(19px,5.3cqw,25px)}
+ .cover-copy>strong{font-size:clamp(24px,6.6cqw,31px)}
+ .cover-scene{height:auto;min-height:0;flex:0 0 auto;margin-top:-25px}
+}
+/* The selected fingertip-and-ribbon cue, still gone after 2.8 seconds. */
+.gesture-cue{padding:7px 16px 7px 11px;gap:8px;border-color:#f0d6d5;background:#fffffff5;box-shadow:0 4px 20px #5f292414;color:#66534f}
+.gesture-cue-motion{display:block;position:relative;width:76px;height:46px;flex:none}
+.gesture-cue-motion img{position:absolute;right:-3px;top:0;width:68px;height:46px;object-fit:contain}
+.gesture-cue-trail{position:absolute;left:3px;top:22px;width:31px;border-top:2px dotted #e27484;opacity:.75}
+.gesture-cue-trail:before{content:'';position:absolute;left:0;top:-4px;width:6px;height:6px;border-left:1.5px solid #df7180;border-bottom:1.5px solid #df7180;transform:rotate(45deg)}
+.gesture-cue.is-visible .gesture-cue-motion{animation:trip-finger-swipe 1.15s cubic-bezier(.25,.1,.3,1) 2}
+@keyframes trip-finger-swipe{0%,15%{transform:translateX(9px) rotate(0deg)}65%,85%{transform:translateX(-9px) rotate(-4deg)}100%{transform:translateX(9px) rotate(0deg)}}
+/* Food image atlas: unique meal illustrations, explicitly labelled as concepts. */
+.food-photo-frame{position:relative;overflow:hidden;aspect-ratio:3/2;margin:-17px -16px 15px;border-radius:17px 17px 0 0;background:#f8efe2}
+.food-card.is-selected .food-photo-frame{margin:-16px -15px 15px}
+.food-photo{width:100%;height:100%;background-image:url('food-photo-atlas.png');background-size:400% 300%;background-position:var(--food-x) var(--food-y);background-repeat:no-repeat}
+.food-photo-frame figcaption{position:absolute;right:7px;bottom:7px;font-size:11px;font-weight:500;line-height:1.6;background:#ffffffe8;color:#6b5c56;border-radius:99px;padding:3px 8px;max-width:calc(100% - 14px)}
+/* Staggered entrances and small, tactile responses. */
+.motion-enabled .reveal-item{opacity:0;transform:translateY(12px)}
+.motion-enabled .reveal-item.is-revealed{animation:trip-reveal .65s cubic-bezier(.2,.75,.2,1) var(--reveal-delay,0ms) both}
+@keyframes trip-reveal{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.page-enter .page-heading{animation:trip-heading-in .7s cubic-bezier(.2,.8,.2,1) both}
+.page-enter .map-title,.page-enter .guide-title{animation:trip-reveal .7s .12s both}
+.page-enter .day-date,.page-enter .guide-time{animation:trip-soft-pop .65s .12s both}
+.cover.page-enter h1{animation:trip-reveal .8s both}
+.page-enter .cover-subtitle{animation:trip-soft-pop .8s .1s both}
+.page-enter .cover-date{animation:trip-reveal .7s .2s both}
+.page-enter .cover-copy{animation:trip-reveal .8s .3s both}
+.page-enter .yellow-swoosh{animation:trip-underline .85s .15s both}
+@keyframes trip-heading-in{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes trip-soft-pop{0%{opacity:0;transform:translateY(7px) scale(.9)}65%{opacity:1;transform:translateY(0) scale(1.025)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes trip-underline{from{opacity:0;transform:rotate(-4deg) scaleX(.25)}to{opacity:1;transform:rotate(-4deg) scaleX(1)}}
+.page.is-current .cover-marks .character,.page.is-current .page-heading .character{animation:trip-sticker-sway 4.8s ease-in-out infinite;transform-origin:center 70%}
+.page.is-current .beret{animation-delay:-2.2s!important}
+.page.is-current .page-footer .character{animation:trip-tiny-bob 5s ease-in-out infinite}
+.page.is-current .page-footer .purin{animation-delay:-2.5s}
+.cover.is-current .cover-scene{animation:trip-hero-drift 6s ease-in-out infinite}
+.page.is-current .travel{animation:trip-tiny-bob 4.8s ease-in-out infinite}
+.cover.is-current .cover-copy:before,.cover.is-current .cover-copy:after{animation:trip-sparkle 3.2s ease-in-out infinite}
+.cover.is-current .cover-copy:after{animation-delay:-1.6s}
+@keyframes trip-sticker-sway{0%,100%{transform:rotate(-4deg) translateY(0)}50%{transform:rotate(4deg) translateY(-3px)}}
+@keyframes trip-tiny-bob{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-3px) rotate(2deg)}}
+@keyframes trip-hero-drift{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes trip-sparkle{0%,100%{opacity:.25;transform:scale(.75) rotate(-8deg)}50%{opacity:1;transform:scale(1.12) rotate(8deg)}}
+.book-controls button,.day-map-jump,.food-meals button,.spot-event,.food-card-actions button,.food-card-actions a,.guide-links a,.food-map-toggle{transition:transform .16s ease,background-color .2s ease,box-shadow .2s ease}
+.book-controls button:active,.day-map-jump:active,.food-meals button:active,.spot-event:active,.food-card-actions button:active,.food-card-actions a:active,.guide-links a:active,.food-map-toggle:active{transform:scale(.965)}
+.book-controls button[aria-current],.food-meals button[aria-selected="true"]{animation:trip-tab-pop .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes trip-tab-pop{from{transform:scale(.95)}60%{transform:scale(1.025)}to{transform:scale(1)}}
+@media(hover:hover){.food-card:hover .food-photo{transform:scale(1.035);transition:transform .6s ease}.spot-link:hover,.day-map-jump:hover{background-color:#fff6db}}
+.motion-paused .page.is-current *{animation-play-state:paused!important}
+@media(prefers-reduced-motion:reduce){
+ .page-enter *,.page.is-current .character,.page.is-current .travel,.cover.is-current .cover-scene,.cover-copy:before,.cover-copy:after,.book-controls button,.food-meals button{animation:none!important}
+ .motion-enabled .reveal-item{opacity:1;transform:none;animation:none!important}
+ .gesture-cue.is-visible .gesture-cue-motion{animation:none}
+}

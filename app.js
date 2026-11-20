@@ -13,6 +13,36 @@ const pages = [...book.children];
 const dots = [...document.querySelectorAll('[data-page-target]')];
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const phoneLayout = matchMedia('(max-width: 767px), (max-height: 600px) and (pointer: coarse)');
+let motionPage = null;
+const motionSeen = new WeakSet();
+const motionSelector = '.event,.guide-figure,.guide-intro,.guide-highlight,.guide-memo,.guide-links,.map-stop,.return-reservation,.food-card,.spot-link,.trip-memo,.source-note,.food-source-note,.page-footer';
+const motionObserver = !reduced.matches && 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    entry.target.classList.add('is-revealed');
+    motionObserver.unobserve(entry.target);
+  });
+}, {threshold: 0.06, rootMargin: '0px 0px -12px 0px'}) : null;
+function enhanceTripMotion(scope = document) {
+  if (!motionObserver) return;
+  const targets = [...scope.querySelectorAll(motionSelector)];
+  if (scope.matches?.(motionSelector)) targets.unshift(scope);
+  targets.forEach((element,index) => {
+    if (motionSeen.has(element)) return;
+    motionSeen.add(element);
+    element.classList.add('reveal-item');
+    element.style.setProperty('--reveal-delay', Math.min((index % 5) * 45, 180) + 'ms');
+    motionObserver.observe(element);
+  });
+}
+function enterPageMotion() {
+  const page = pages[active];
+  if (motionPage === page) return;
+  motionPage = page;
+  pages.forEach(p => {p.classList.toggle('is-current', p === page); p.classList.remove('page-enter');});
+  void page.offsetWidth;
+  page.classList.add('page-enter');
+}
 let active = 0;
 let navigationTarget = null;
 let scrollFrame;
@@ -60,6 +90,7 @@ function finishScroll() {
   navigationTarget = null;
   state(nearestPage());
   showGestureCue();
+  enterPageMotion();
 }
 function go(index) {
   const target = Math.max(0, Math.min(pages.length - 1, index));
@@ -152,5 +183,10 @@ document.querySelectorAll('.guide-figure img').forEach(img => img.addEventListen
 pages.forEach(page => new ResizeObserver(() => {
   if (page === pages[active]) syncHeight();
 }).observe(page));
+if (motionObserver) {
+  document.documentElement.classList.add('motion-enabled');
+  enhanceTripMotion();
+}
+document.addEventListener('visibilitychange', () => document.documentElement.classList.toggle('motion-paused', document.hidden));
 state(0);
-requestAnimationFrame(showGestureCue);
+requestAnimationFrame(() => { showGestureCue(); enterPageMotion(); });

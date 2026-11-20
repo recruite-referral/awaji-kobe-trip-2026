@@ -39,6 +39,11 @@ const foodDays = {
     }
   }
 };
+
+const foodPhotoTiles = {1:{breakfast:[0,0],lunch:[1,2],dinner:[3,4,5]},2:{breakfast:[6,7],lunch:[8,9],dinner:[10,11]}};
+for (const [day,data] of Object.entries(foodDays)) {
+  for (const [meal,group] of Object.entries(data.meals)) group.places.forEach((place,index) => { place.photo = foodPhotoTiles[day][meal][index]; });
+}
 const foodEscape = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function refreshFoodMap(pageId) {
   if (!pageId.startsWith('food-day')) return;
@@ -82,12 +87,13 @@ for (const [day, data] of Object.entries(foodDays)) {
     page.querySelector('.food-meal-note').textContent = meal.note;
     const panel = page.querySelector('.food-candidates');
     panel.setAttribute('aria-labelledby', 'food-tab-' + day + '-' + key);
-    panel.innerHTML = meal.places.map((place, i) => `<section class="food-card"><span class="food-card-tag">${foodEscape(place.type)}</span><h4>${foodEscape(place.name)}</h4><p>${foodEscape(place.description)}</p><dl><div><dt>予算</dt><dd>${foodEscape(place.budget)}</dd></div><div><dt>時間</dt><dd>${foodEscape(place.hours)}</dd></div><div><dt>行き方</dt><dd>${foodEscape(place.access)}</dd></div></dl><div class="food-card-actions">${place.query?`<button type="button" data-food-place="${i}">地図に表示</button>`:''}${place.source?`<a href="${place.source}" target="_blank" rel="noopener noreferrer">${foodEscape(place.sourceLabel || '公式の案内')}</a>`:''}</div></section>`).join('');
+    panel.innerHTML = meal.places.map((place, i) => `<section class="food-card"><figure class="food-photo-frame"><div class="food-photo" role="img" aria-label="${foodEscape(place.name)}の料理イメージ" style="--food-x:${(place.photo%4)*100/3}%;--food-y:${Math.floor(place.photo/4)*50}%"></div><figcaption>お料理のイメージ（AI生成）</figcaption></figure><span class="food-card-tag">${foodEscape(place.type)}</span><h4>${foodEscape(place.name)}</h4><p>${foodEscape(place.description)}</p><dl><div><dt>予算</dt><dd>${foodEscape(place.budget)}</dd></div><div><dt>時間</dt><dd>${foodEscape(place.hours)}</dd></div><div><dt>行き方</dt><dd>${foodEscape(place.access)}</dd></div></dl><div class="food-card-actions">${place.query?`<button type="button" data-food-place="${i}">地図に表示</button>`:''}${place.source?`<a href="${place.source}" target="_blank" rel="noopener noreferrer">${foodEscape(place.sourceLabel || '公式の案内')}</a>`:''}</div></section>`).join('');
     panel.querySelectorAll('[data-food-place]').forEach(button => button.addEventListener('click', () => {
       const index = Number(button.dataset.foodPlace);
       showPlace(meal.places[index], index);
       page.scrollTo({top: 0, behavior: matchMedia('(prefers-reduced-motion:reduce)').matches ? 'instant' : 'smooth'});
     }));
+    if (typeof enhanceTripMotion === 'function') enhanceTripMotion(panel);
     const first = meal.places.findIndex(place => place.query);
     showPlace(meal.places[first], first);
   }
