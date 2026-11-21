@@ -203,6 +203,8 @@
 @media(hover:hover){.food-card:hover .food-photo{transform:scale(1.035);transition:transform .6s ease}.spot-link:hover,.day-map-jump:hover{background-color:#fff6db}}
 .motion-paused .page.is-current *{animation-play-state:paused!important}
 .book-track{overflow-x:hidden;scroll-snap-type:none;scroll-behavior:auto;touch-action:pan-y pinch-zoom}
+.book-track>.page{touch-action:pan-y pinch-zoom}
+.book-track img{-webkit-user-drag:none;-webkit-user-select:none;user-select:none}
 .book-track.is-turning{user-select:none;-webkit-user-select:none}
 .page-turn-stage{position:fixed;z-index:30;overflow:hidden;perspective:1800px;perspective-origin:0 50%;pointer-events:none;contain:layout style;isolation:isolate}
 .page-turn-sheet{position:absolute;inset:0;transform-origin:left center;transform-style:preserve-3d;will-change:transform;box-shadow:12px 0 25px #673b392b}

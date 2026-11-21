@@ -71,7 +71,11 @@ function syncHeight() {
 }
 function state(index) {
   active = Math.max(0, Math.min(pages.length - 1, index));
-  pages.forEach((page, i) => { page.inert = i !== active; });
+  // Keep the gesture's original target alive until the turning sheet settles.
+  // Safari may cancel a touch when its ancestor becomes inert mid-gesture.
+  pages.forEach((page, i) => {
+    page.inert = i !== active && !(pageTurn && i === pageTurn.from);
+  });
   syncHeight();
   const section = active >= pages.findIndex(p => p.id === 'links') ? 'links'
     : active >= pages.findIndex(p => p.id === 'day2') ? 'day2'
@@ -166,6 +170,7 @@ function completePageTurn(commit) {
   if (!pageTurn) return;
   const turn = pageTurn;
   pageTurn = null;
+  clearTimeout(turn.finishTimer);
   turn.animation?.cancel();
   if (commit) placePage(turn.target);
   else {
@@ -186,9 +191,14 @@ function settlePageTurn(commit) {
   if (!pageTurn || pageTurn.settling) return;
   const turn = pageTurn;
   turn.settling = true;
+  turn.commit = commit;
   book.dataset.turnState = 'settling';
   const destination = commit ? 1 : 0;
   const duration = reduced.matches ? 0 : Math.max(200, 720 * Math.abs(destination - turn.progress));
+  // A suspended/interrupted animation must never leave navigation locked.
+  turn.finishTimer = setTimeout(() => {
+    if (pageTurn === turn) completePageTurn(commit);
+  }, duration + 200);
   turn.animation = turn.sheet.animate([
     {transform: paperTransform(turn, turn.progress)},
     {transform: paperTransform(turn, destination)}
@@ -217,47 +227,89 @@ function openSpot(key) { goToId('spot-' + key); }
 
 dots.forEach(button => button.addEventListener('click', () => goToId(button.dataset.pageTarget)));
 const ownsGesture = target => target.closest('input,textarea,select,[contenteditable="true"],.map-interactive,.food-map.is-interactive,.leaflet-control');
+function beginSwipe(id, x, y, input) {
+  swipePointer = {id, x, y, input, at: performance.now(), dx: 0, started: false};
+}
 book.addEventListener('pointerdown', event => {
-  if (!event.isPrimary || event.button !== 0 || pageTurn || ownsGesture(event.target)) return;
-  swipePointer = {id: event.pointerId, x: event.clientX, y: event.clientY, at: performance.now(), dx: 0, started: false};
+  // Touch uses Touch Events below; handling both streams would turn twice.
+  if (event.pointerType === 'touch' || !event.isPrimary || event.button !== 0 || pageTurn || ownsGesture(event.target)) return;
+  beginSwipe(event.pointerId, event.clientX, event.clientY, 'pointer');
 }, {passive: true});
-book.addEventListener('pointermove', event => {
+function moveSwipe(id, x, y, event) {
   const pointer = swipePointer;
-  if (!pointer || pointer.id !== event.pointerId) return;
-  const dx = event.clientX - pointer.x;
-  const dy = event.clientY - pointer.y;
+  if (!pointer || pointer.id !== id) return;
+  const dx = x - pointer.x;
+  const dy = y - pointer.y;
   if (!pointer.started) {
     // Let the browser own vertical movement and pinch zoom from the start.
     if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)) { swipePointer = null; return; }
     if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
     const target = active + (dx < 0 ? 1 : -1);
     if (reduced.matches) {
-      if (Math.abs(dx) > 55) { go(target); suppressClickUntil = performance.now() + 400; swipePointer = null; }
+      if (Math.abs(dx) > 55) {
+        if (event.cancelable) event.preventDefault();
+        go(target); suppressClickUntil = performance.now() + 400; swipePointer = null;
+      }
       return;
     }
+    if (event.cancelable) event.preventDefault();
+    if (pointer.input === 'pointer') book.setPointerCapture(id);
     if (!startPageTurn(target)) { swipePointer = null; return; }
     pointer.started = true;
     pointer.direction = dx < 0 ? -1 : 1;
-    book.setPointerCapture(event.pointerId);
   }
-  event.preventDefault();
+  if (event.cancelable) event.preventDefault();
   pointer.dx = dx;
   updatePageTurn(pointer.direction * dx / book.clientWidth);
+}
+book.addEventListener('pointermove', event => {
+  if (swipePointer?.input === 'pointer') moveSwipe(event.pointerId, event.clientX, event.clientY, event);
 }, {passive: false});
-function endSwipe(event, cancelled = false) {
+function endSwipe(id, cancelled = false) {
   const pointer = swipePointer;
-  if (!pointer || pointer.id !== event.pointerId) return;
+  if (!pointer || pointer.id !== id) return;
   swipePointer = null;
   if (!pointer.started) return;
   suppressClickUntil = performance.now() + 450;
   const travel = pointer.direction * pointer.dx;
   const velocity = travel / Math.max(1, performance.now() - pointer.at);
   settlePageTurn(!cancelled && (travel > book.clientWidth * .22 || (travel > 35 && velocity > .45)));
-  if (book.hasPointerCapture(event.pointerId)) book.releasePointerCapture(event.pointerId);
+  if (pointer.input === 'pointer' && book.hasPointerCapture(id)) book.releasePointerCapture(id);
 }
-book.addEventListener('pointerup', event => endSwipe(event));
-book.addEventListener('pointercancel', event => endSwipe(event, true));
-book.addEventListener('lostpointercapture', event => endSwipe(event, true));
+window.addEventListener('pointerup', event => {
+  if (swipePointer?.input === 'pointer') endSwipe(event.pointerId);
+});
+book.addEventListener('pointercancel', event => {
+  if (swipePointer?.input === 'pointer') endSwipe(event.pointerId, true);
+});
+book.addEventListener('lostpointercapture', event => {
+  if (swipePointer?.input === 'pointer') endSwipe(event.pointerId, true);
+});
+book.addEventListener('touchstart', event => {
+  if (event.touches.length !== 1) {
+    if (swipePointer?.input === 'touch') endSwipe(swipePointer.id, true);
+    return;
+  }
+  if (pageTurn || ownsGesture(event.target)) return;
+  const touch = event.touches[0];
+  beginSwipe(touch.identifier, touch.clientX, touch.clientY, 'touch');
+}, {passive: true});
+book.addEventListener('touchmove', event => {
+  if (swipePointer?.input !== 'touch' || event.touches.length !== 1) return;
+  const touch = event.touches[0];
+  moveSwipe(touch.identifier, touch.clientX, touch.clientY, event);
+}, {passive: false});
+function endTouch(event, cancelled = false) {
+  if (swipePointer?.input !== 'touch') return;
+  const touch = [...event.changedTouches].find(t => t.identifier === swipePointer.id);
+  if (touch) endSwipe(touch.identifier, cancelled);
+}
+window.addEventListener('touchend', event => endTouch(event));
+window.addEventListener('touchcancel', event => endTouch(event, true));
+window.addEventListener('blur', () => {
+  swipePointer = null;
+  if (pageTurn) completePageTurn(pageTurn.settling && pageTurn.commit);
+});
 book.addEventListener('click', event => {
   if (performance.now() >= suppressClickUntil) return;
   event.preventDefault();
